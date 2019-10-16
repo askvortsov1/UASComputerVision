@@ -1,3 +1,2 @@
-from .thermal import *
-from .LOCALIZE import *
-from .ATTRIBUTES import *
+from .localize_wrapper import *
+from .attribute_wrapper import *

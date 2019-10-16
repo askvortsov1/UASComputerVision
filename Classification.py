@@ -4,7 +4,7 @@ import numpy as np
 from time import time 
 from tqdm import tqdm 
 
-import NN as models
+import models
 import OPTIM as optimizers
 import Datasets as datasets
 

@@ -1,26 +1,26 @@
 import cv2
+import random
 import numpy as np
 from glob import glob
-from imageio import imread
-import random
 from PIL import Image
+from imageio import imread
 
-
-class AddBackground(object):
-    def __init__(self, args):
-        self.probability = args.bg_prob
-        self.min_resize_ratio = args.min_resize_ratio
-        self.available_bgs = glob('./data/Aerial/MASATI-v1/*/*.png')
-        self.rand_bg = lambda resize: cv2.resize(src=imread(uri=np.random.choice(self.available_bgs, size=1)[0]) / 255,
-                                               dsize=resize, interpolation=cv2.INTER_NEAREST)
+class AddBG(object):
+    def __init__(self, bg_prob, min_resize_ratio):
+        self.__setattr__('probability', bg_prob)
+        self.__setattr__('min_resize_ratio', min_resize_ratio)
+        self.__setattr__('available_bg', glob('../../data/Aerial/MASATI-v1/*/*.png'))
+        
+    def random_background(self, resize):
+        return cv2.resize(src=np.asarray(Image.open(random.choice(self.available_bg)).convert('RGB') / 255),
+                          dsize=resize, interpolation=cv2.INTER_NEAREST)
 
     def __call__(self, src):
-        if not np.random.binomial(n=1, p=self.probability):
-            return src
-        target = self.rand_bg((src.shape[0], src.shape[1]))
-        while target.shape[-1] == 4:
-            target = self.rand_bg((src.shape[0], src.shape[1]))
-        resize_dim = int(np.random.uniform(low=self.min_resize_ratio, high=1.0) * src.shape[0])
+        if np.random.uniform(low=0.0, high=1.0) > self.probability:
+            return src 
+        h, w = src.shape[:2]
+        target = self.random_background((h, w))
+        resize_dim = int(np.random.uniform(low=self.min_resize_ratio, high=1.0) * h)
         src = cv2.resize(src, dsize=(resize_dim, resize_dim), interpolation=cv2.INTER_NEAREST)
         h, w = src.shape[:2]
         x1 = random.randint(0, target.shape[0] - h)
@@ -69,3 +69,5 @@ class FractionalMaxPool(object):
                         self._maxpool(img[idxs1[0]:idxs1[1], idxs2[0]:idxs2[1], :],
                                       int(self.kernel_size())), dsize=(s2, s1)) * 255, dtype='uint8')
         return Image.fromarray(img)
+
+
