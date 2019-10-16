@@ -1,7 +1,7 @@
 # UASComputerVision
 Current Agenda:
 
-1) rewrite FractionalMaxPool transformation
+1) Rewrite FractionalMaxPool transformation
 2) Linearize Classification.py
 3) Remove OPTIM directory, the only optimizers being used will be SGD and ADAM (this will be done once classification is rewritten)
 4) Find efficient dimensionality reduction technique to reduce input size of image to the localization pipeline
