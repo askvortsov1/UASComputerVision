@@ -1,25 +1,35 @@
 import cv2
+import h5py
 import random
 import numpy as np
 from glob import glob
 from PIL import Image
 from imageio import imread
 
+
+
+
 class AddBG(object):
-    def __init__(self, bg_prob, min_resize_ratio):
+    def __init__(self, root, bg_prob, min_resize_ratio, res):
+        self.backgrounds = AddBG.get_resized_bg(root, res)
+        self.n_backgrounds = len(self.backgrounds)
         self.__setattr__('probability', bg_prob)
         self.__setattr__('min_resize_ratio', min_resize_ratio)
         self.__setattr__('available_bg', glob('../../data/Aerial/MASATI-v1/*/*.png'))
+
+    @staticmethod
+    def get_resized_bg(root, res):
+        backgrounds = []
+        for bg in np.asarray(h5py.File(root, 'r+')['Image']) / 255:
+            backgrounds.append(cv2.resize(bg, dsize=res, interpolation=cv2.INTER_NEAREST))
+        return backgrounds
         
-    def random_background(self, resize):
-        return cv2.resize(src=np.asarray(Image.open(random.choice(self.available_bg)).convert('RGB') / 255),
-                          dsize=resize, interpolation=cv2.INTER_NEAREST)
 
     def __call__(self, src):
         if np.random.uniform(low=0.0, high=1.0) > self.probability:
             return src 
+        target = self.backgrounds[np.random.randint(low=0, high=self.n_backgrounds)]
         h, w = src.shape[:2]
-        target = self.random_background((h, w))
         resize_dim = int(np.random.uniform(low=self.min_resize_ratio, high=1.0) * h)
         src = cv2.resize(src, dsize=(resize_dim, resize_dim), interpolation=cv2.INTER_NEAREST)
         h, w = src.shape[:2]
@@ -31,14 +41,16 @@ class AddBG(object):
 
 
 class FractionalMaxPool(object):
-    def __init__(self, args):
-        self.probability = args.fmp_prob
-        kernel_size = args.kernel_sizes
-        if sum(kernel_size) != 0:
-            assert (len(kernel_size) % 2 == 0) and (sum(kernel_size[1::2]) == 1) and (0 not in kernel_size)
-            self.kernel_size = lambda: np.random.choice(a=kernel_size[0::2], p=kernel_size[1::2])
+    def __init__(self, kernel_size=2, prob=0.75):
+        self.probability = prob
+        if 0:
+            if sum(kernel_size) != 0:
+                assert (len(kernel_size) % 2 == 0) and (sum(kernel_size[1::2]) == 1) and (0 not in kernel_size)
+                self.kernel_size = lambda: np.random.choice(a=kernel_size[0::2], p=kernel_size[1::2])
+            else:
+                self.kernel_size = lambda: 3
         else:
-            self.kernel_size = lambda: 3
+            self.kernel_size = lambda: kernel_size
 
     def _maxpool(self, src, kernel_size):
 
