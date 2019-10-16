@@ -43,8 +43,8 @@ def build_transforms(feature, split, transform_params):
 
     
 def build_dataloaders(feature, batch_size, batch_size_test, n_threads): 
-    transform_params={'background_root': '../../data/Aerial/100x100masati-v1.h5', 
-                      'bg_prob': 1.0, 'min_resize_ratio': 0.5, 'resolution': (32, 32)}
+    transform_params={'background_root': '../../data/Aerial/Split_Aerial-8900IMGS.h5',  #100x100masati-v1.h5', 
+                      'bg_prob': 1.0, 'min_resize_ratio': 1.0, 'resolution': (32, 32)}
     transform = build_transforms('_', '_', transform_params=transform_params)
     return DataLoader(
         dataset=FeatureDataset(
@@ -77,8 +77,12 @@ if show_batch:
     import matplotlib.pyplot as plt 
     import torchvision
     d_iter = iter(train)
+    i = 0
     for x, y in d_iter:
-
+        i += 1
+        if i % 5 == 0:
+            print('iteration {}'.format(i))
+        
         plt.imshow(np.transpose(torchvision.utils.make_grid(x, nrow=8, padding=0).numpy(), (1, 2, 0)))
         plt.show()
         print(y)

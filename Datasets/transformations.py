@@ -3,10 +3,7 @@ import h5py
 import random
 import numpy as np
 from glob import glob
-from PIL import Image
-from imageio import imread
-
-
+from PIL import Image, ImageFilter
 
 
 class AddBG(object):
@@ -15,7 +12,6 @@ class AddBG(object):
         self.n_backgrounds = len(self.backgrounds)
         self.__setattr__('probability', bg_prob)
         self.__setattr__('min_resize_ratio', min_resize_ratio)
-        self.__setattr__('available_bg', glob('../../data/Aerial/MASATI-v1/*/*.png'))
 
     @staticmethod
     def get_resized_bg(root, res):
@@ -23,7 +19,6 @@ class AddBG(object):
         for bg in np.asarray(h5py.File(root, 'r+')['Image']) / 255:
             backgrounds.append(cv2.resize(bg, dsize=res, interpolation=cv2.INTER_NEAREST))
         return backgrounds
-        
 
     def __call__(self, src):
         if np.random.uniform(low=0.0, high=1.0) > self.probability:
@@ -36,7 +31,7 @@ class AddBG(object):
         x1 = random.randint(0, target.shape[0] - h)
         y1 = random.randint(0, target.shape[1] - w)
         mask = 0 ** np.ceil(src)
-        target[x1:x1 + h, y1:y1 + w, :] = mask * target[x1:x1 + h, y1:y1 + w, :] + src
+        target[x1:x1 + h, y1:y1 + w, :] = (mask * target[x1:x1 + h, y1:y1 + w, :] + src)
         return target
 
 
