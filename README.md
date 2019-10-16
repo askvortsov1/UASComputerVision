@@ -9,3 +9,6 @@ Current Agenda:
 we can create new images at run-time since storing enough images for training that are of size 4048x3036 is very rough on memory)
 6) Build .pkl files for training and testing images for classification so that we can avoid having to load each image from memory on every iteration through the dataset. Accessing the images from the .pkl data structure will be more heavy on CPU memory but it will have a much more reasonable run-time complexity. Images should be aligned with their respective features in the data structure that we create.
 7) Make aspect ratio rv a function of a truncated normal distribution instead of random uniform
+
+Below is a link to the google drive from which you can download the data I generated. Put this in the parent directory of the cloned repository as this will prevent the data from being pushed to github (since github only allows for max upload size of 25 MB)
+https://drive.google.com/open?id=1-6Gyro8OHejUN7_9uzWfHZQXd5tnSjeZ
