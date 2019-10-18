@@ -36,6 +36,7 @@ class ObjectDetection(Dataset):
             ymax = np.max(pos[0])
             boxes.append([xmin, ymin, xmax, ymax])
         boxes = torch.as_tensor(boxes, dtype=torch.float32)
+        """
         show = 1
         if show:
             import matplotlib.pyplot as plt 
@@ -50,7 +51,7 @@ class ObjectDetection(Dataset):
                 rect = patches.Rectangle((int(box[0]), box[1]), int(box[2] - box[0]), int(box[3] - box[1]), linewidth=0.75, edgecolor='r', facecolor='none')
                 ax[2].add_patch(rect)
             plt.show()
-            quit()
+            quit()"""
         if self.transform is not None:
             img = self.transform(img)
         return img, {'boxes':boxes, 'areas': (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 2] - boxes[:, 0])}#target #{'boxes': boxes, 'areas': areas}
@@ -58,4 +59,4 @@ class ObjectDetection(Dataset):
 
 def localize(args):
     # TODO FILL OUT THIS FUNCTION, RETURN TRAIN AND TEST DATALOADERS
-    pass
+    return None, None
