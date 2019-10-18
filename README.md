@@ -1,4 +1,7 @@
 # UASComputerVision
+
+![Sample composition of localization cross sections representing target size during the competition](https://github.com/lukeottey/UASComputerVision/blob/master/perspective_from_heli.JPG)
+
 Current Agenda:
 
 1) Rewrite FractionalMaxPool transformation
