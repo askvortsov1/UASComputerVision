@@ -1,6 +1,7 @@
 import os
 import cv2
 import h5py
+import torch
 import pickle
 import argparse 
 import numpy as np 
@@ -10,27 +11,22 @@ from copy import deepcopy
 from imageio import imwrite 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--save_dir', default='../data/Aerial/datasets/')
+parser.add_argument('--save_dir', default='../data/Aerial/datasets')
 parser.add_argument('--target_h5', default=('../data/generated_targets/train_data32x32.h5', \
     '../data/generated_targets/test_data32x32.h5'), nargs='+')
-parser.add_argument('--background_folders', default=['../data/Aerial/sequoia256res', '../data/Aerial/MASATI-v1-low_res'], nargs='+')
-parser.add_argument('--n_train', default=30000, type=int)
-parser.add_argument('--n_test', default=6000, type=int)
-parser.add_argument('--target_pixel_dist', default=(8, 24), nargs='+', type=int)
+parser.add_argument('--background_folders', default=['../data/Aerial/backgrounds/sequoia256res', '../data/Aerial/backgrounds/MASATI-v1-low_res'], nargs='+')
+parser.add_argument('--n_train', default=10000, type=int)
+parser.add_argument('--n_test', default=2000, type=int)
+parser.add_argument('--target_pixel_dist', default=(10, 24), nargs='+', type=int)
 parser.add_argument('--altitude', default=0, type=int, help='if nonzero, it will be used to build target resolutions')
 parser.add_argument('--n_targets', default=(0, 12), nargs='+', type=int)
-parser.add_argument('--resolution', default=(256, 256, 3), nargs='+', type=int)
+parser.add_argument('--resolution', default=(300, 300, 3), nargs='+', type=int)
+parser.add_argument('--resize_background', default=1, type=int)
 parser.add_argument('--blur_factor', default=1.5, type=float)
 parser.add_argument('--blend_range', default=(0.9, 1.0), nargs='+', type=float)
 
 args = parser.parse_args()
 
-"""
-BG_MASATI = '../data/Aerial/Reduced_MASATI-v1'
-BG_SEQUOIA = '../data/Aerial/sequoia-rgb-images'
-SEQUOIA256RES = '../data/Aerial/sequoia256res'
-MLOW_RES = '../data/Aerial/MASATI-v1-low_res'
-"""
 
 def check_collisions(bounding_boxes, new_bounds):
     i1, i2, j1, j2 = new_bounds
@@ -121,18 +117,29 @@ def build_new(split, features_i, save_idx):
     background = cv2.GaussianBlur(
         np.asarray((background * blend_factor + copy * (1 - blend_factor)) * 255, dtype='uint8'),\
              ksize=(3, 3), sigmaX=1)
-    uri = template.format('mask', save_idx)
-    imwrite(uri=uri, im=np.asarray(instance_label * 255, dtype='uint8'))
+    obj_ids = np.unique(instance_label)[1:]
+    boxes = []
+    for obj in obj_ids:
+        pos = np.where(instance_label == obj)
+        xmin = np.min(pos[1])
+        xmax = np.max(pos[1])
+        ymin = np.min(pos[0])
+        ymax = np.max(pos[0])
+        boxes.append([xmin, ymin, xmax, ymax])
+    boxes = torch.as_tensor(boxes, dtype=torch.float32)
     uri = template.format('true', save_idx)
     imwrite(uri=template.format('true', save_idx), im=background)
-    boxes_dict.update({uri: bounding_boxes, 'features': features_i})
+    if save_idx == 0: 
+        print(uri)
+
+    boxes_dict.update({uri: {'boxes': boxes, 'features': features_i}})
     return len(bounding_boxes)
     
 
 os.mkdir(save_loc)
 for split in ('train', 'test'):
     total_targets = 0
-    for new_dir in ('/{}', '/{}/true', '/{}/mask'):
+    for new_dir in ('/{}', '/{}/true'):
         os.mkdir(save_loc + new_dir.format(split))
     h5_file = h5py.File(target_h5[split], 'r+')
     targets = np.asarray(h5_file['/X']) / 255

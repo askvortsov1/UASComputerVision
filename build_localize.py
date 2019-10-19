@@ -8,6 +8,8 @@ import Datasets
 import utils.misc as misc
 import utils.Meters as Meters 
 import utils.nn_utils as nn_utils
+from Datasets.localize_wrapper import localize
+from SingleShotDetection import SSD300, MultiBoxLoss
 
 import torch
 import torch.optim as optim
@@ -20,6 +22,7 @@ parser = argparse.ArgumentParser()
 
 """ ---- MODEL PARAMETERS ---- """
 parser.add_argument('--model', default='yolov3', type=str, options=model_options)
+parser.add_argument('--n_classes', default=13, type=int)
 
 """ ---- TRAINING PARAMETERS ---- """
 parser.add_argument('--n_devices', default=4, type=int)
@@ -28,9 +31,9 @@ parser.add_argument('--use_cuda', default=1, type=int,
                          'the program will set use_cuda to False prior to training')
 parser.add_argument('--n_threads', default=4, type=int)
 parser.add_argument('--n_epochs', default=200, type=int)
-parser.add_argument('--batch_size', default=128, type=int)
-parser.add_argument('--batch_size_test', default=0, type=int, help='if 0, will be set to value of batch_size')
-parser.add_argument('--lr', default=0.1, type=float)
+parser.add_argument('--batch_size', default=8, type=int)
+parser.add_argument('--batch_size_test', default=8, type=int, help='if 0, will be set to value of batch_size')
+parser.add_argument('--lr', default=le-3, type=float)
 parser.add_argument('--milestones', type=int, nargs='+', default=[60, 120, 160])
 parser.add_argument('--gamma', type=float, default=0.2)
 parser.add_argument('--scheduler_type', default='multistep', type=str, choices=['multistep', 'cosine_annealing'])
@@ -64,22 +67,124 @@ if not args.batch_size_test:
 A DIRECTORY OF NAME 'model_name' WILL BE CREATED AND TRAIN/TEST DATA WILL BE STORED HERE """
 model_name = misc.name_model(args)
 
-""" DEFINE CSV LOGGER AND ROWS TO WRITE DATA TO """
+""" DEFINE CSV LOGGER AND ROWS TO WRITE DATA TO 
 logger = misc.CSVLogger(filename='{name}/log.csv'.format(name=model_name), row=row, save=args.save)
 if args.save:
     with open('{name}/parameters.txt'.format(name=model_name), 'w+') as f:
-        f.write(str(args))
+        f.write(str(args))"""
 
 """ GET TRAINLOADER AND TESTLOADER FROM localize() """
 trainloader, testloader = Datasets.localize_wrapper.localize(args)
 
 """ BUILD MODEL AND CONVERT TO CUDA IF USING GPU & BUILD OPTIMIZER AND SCHEDULER """
-model, optimizer, scheduler = nn_utils.build_neuralnet_components(args, n_batches=len(trainloader))
+model = SSD300(n_classes=args.n_classes)
+biases = list()
+not_biases = list()
+for param_name, param in model.named_parameters():
+    if param.requires_grad:
+        if param_name.endswith('.bias'):
+            biases.append(param)
+        else:
+            not_biases.append(param)
 
-""" BUILD LOSS FUNCTION """
-loss_fn = nn_utils.cost(args.use_cuda)
+optimizer = optim.SGD(params=[{'params': biases, 'lr': 2 * args.lr}, {'params': not_biases}], lr=args.lr, \
+    momentum=args.momentum, weight_decay=args.weight_decay)
+model = model.to(device)
+loss_fn = MultiBoxLoss(priors_cxcy=model.priors_cxcy).to(device)
+# root, batch_size, batch_size_test, transform, n_threads, resolution
+root = 'train-10000_test-2000_res-256_lower-10_upper-24'
+trainloader, testloader = localize(root, args.batch_size, args.batch_size_test, args.n_threads)
+epochs_since_imp = 0
 
 
+def train(epoch):
+    model.train()
+    n_batches = len(trainloader)
+    for i, (images, boxes, labels) in enumerate(trainloader):
+        # Move to default device
+        images = images.to(device)  # (batch_size (N), 3, 300, 300)
+        boxes = [b.to(device) for b in boxes]
+        labels = [l.to(device) for l in labels]
+
+        # Forward prop.
+        predicted_locs, predicted_scores = model(images)  # (N, 8732, 4), (N, 8732, n_classes)
+
+        # Loss
+        loss = loss_fn(predicted_locs, predicted_scores, boxes, labels)  # scalar
+
+        # Backward prop.
+        optimizer.zero_grad()
+        loss.backward()
+
+        # Update model
+        optimizer.step()
+
+
+        # Print status
+        if i % 10 == 0:
+            print('batch: [{}/{}]'.format(i, n_batches))
+            print('Epoch: [{0}][{1}/{2}]\t'
+                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(epoch, i, len(trainloader),
+                                                                  loss=losses))
+    del predicted_locs, predicted_scores, images, boxes, labels
+
+
+def validate():
+    model.eval()  # eval mode disables dropout
+    n_batches = len(testloader)
+    with torch.no_grad():
+        # Batches
+        for i, (images, boxes, labels) in enumerate(testloader):
+
+            # Move to default device
+            images = images.to(device)  # (N, 3, 300, 300)
+            boxes = [b.to(device) for b in boxes]
+            labels = [l.to(device) for l in labels]
+
+            # Forward prop.
+            predicted_locs, predicted_scores = model(images)  # (N, 8732, 4), (N, 8732, n_classes)
+
+            # Loss
+            loss = loss_fn(predicted_locs, predicted_scores, boxes, labels)
+
+
+            # Print status
+            if i % 10 == 0:
+                print('batch: [{}/{}]'.format(i, n_batches))
+                print('[{0}/{1}]\t'
+                      'Batch Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                      'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(i, len(val_loader),
+                                                                      batch_time=batch_time,
+                                                                      loss=losses))
+
+    print('\n * LOSS - {loss.avg:.3f}\n'.format(loss=losses))
+
+    return losses.avg
+
+
+for epoch in range(1, args.n_epochs + 1):
+
+        # One epoch's training
+        train(epoch)
+
+        # One epoch's validation
+        val_loss = validate()
+
+        # Did validation loss improve?
+        is_best = val_loss < best_loss
+        best_loss = min(val_loss, best_loss)
+
+        if not is_best:
+            epochs_since_improvement += 1
+            print("\nEpochs since last improvement: %d\n" % (epochs_since_imp))
+
+        else:
+            epochs_since_improvement = 0
+
+
+
+
+"""
 row = ['grid_size', 'loss', 'x', 'y', 'w', 'h', 'confidence', 'class', 'class_acc', \
     'recall50', 'recall75', 'precision', 'confidence_obj', 'confidence_noobj']
 
@@ -101,7 +206,7 @@ def train(epoch):
 
 def evaluate():
     pass
-
+"""
 
 
 
