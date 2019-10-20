@@ -92,7 +92,9 @@ def build_new(split, features_i, save_idx):
         background = np.asarray(Image.open(train_backgrounds[rand_background_idx]).convert('RGB')) / 255
     else: 
         background = np.asarray(Image.open(test_backgrounds[rand_background_idx]).convert('RGB')) / 255
-    assert background.shape == args.resolution
+    #assert background.shape == args.resolution
+    if background.shape != args.resolution:
+        background = cv2.resize(background, (args.resolution[0], args.resolution[1]), interpolation=cv2.INTER_NEAREST)
     copy = deepcopy(background)
     instance_label = np.zeros(shape=args.resolution)
     color_labels = iter(np.random.choice(a=np.arange(0.1, 1.0, 0.02), size=n_targets, replace=False))

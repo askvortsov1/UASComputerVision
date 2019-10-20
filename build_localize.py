@@ -4,15 +4,16 @@ import time
 import argparse 
 
 import models 
-import Datasets 
 import utils.misc as misc
 import utils.Meters as Meters 
-import utils.nn_utils as nn_utils
-from Datasets.localize_wrapper import localize
-from SingleShotDetection import SSD300, MultiBoxLoss
+from Datasets.localize_wrapper import localize_dataset
+# from SingleShotDetection import SSD300, MultiBoxLoss
 
 import torch
 import torch.optim as optim
+import torchvision.transforms as transforms
+
+dataset_options = [dataset for dataset in os.listdir('../data/Aerial/datasets') if dataset != '.DS_Store']
 
 model_options = sorted(name for name in models.__dict__
                        if not name.startswith("__")
@@ -20,20 +21,24 @@ model_options = sorted(name for name in models.__dict__
 
 parser = argparse.ArgumentParser()
 
+""" ---- SAVING CONFIG ---- """
+parser.add_argument('--no-save', action='store_false', dest='save')
+parser.add_argument('--message', default='', type=str, help='add optional message to directory name')
+
 """ ---- MODEL PARAMETERS ---- """
-parser.add_argument('--model', default='yolov3', type=str, options=model_options)
+parser.add_argument('--model', default='yolov3', type=str, choices=model_options)
 parser.add_argument('--n_classes', default=13, type=int)
+parser.add_argument('--resolution', default=256, type=int)
 
 """ ---- TRAINING PARAMETERS ---- """
 parser.add_argument('--n_devices', default=4, type=int)
-parser.add_argument('--use_cuda', default=1, type=int,
-                    help='if cuda is unavailable but use_cuda is set to True, '
-                         'the program will set use_cuda to False prior to training')
-parser.add_argument('--n_threads', default=4, type=int)
+parser.add_argument('--no-use_cuda', action='store_false', dest='use_cuda')
+parser.add_argument('--n_processes', default=4, type=int)
+parser.add_argument('--dataset', default=dataset_options[0], type=str)
 parser.add_argument('--n_epochs', default=200, type=int)
 parser.add_argument('--batch_size', default=8, type=int)
-parser.add_argument('--batch_size_test', default=8, type=int, help='if 0, will be set to value of batch_size')
-parser.add_argument('--lr', default=le-3, type=float)
+parser.add_argument('--batch_size_test', default=8, type=int)
+parser.add_argument('--lr', default=1e-3, type=float)
 parser.add_argument('--milestones', type=int, nargs='+', default=[60, 120, 160])
 parser.add_argument('--gamma', type=float, default=0.2)
 parser.add_argument('--scheduler_type', default='multistep', type=str, choices=['multistep', 'cosine_annealing'])
@@ -44,14 +49,10 @@ parser.add_argument('--epoch_reports', default=7, type=int, help='number of upda
 parser.add_argument('--weight_decay', default=1e-4, type=float)
 parser.add_argument('--momentum', default=0.9, type=float)
 parser.add_argument('--dampening', default=0, type=float)
-parser.add_argument('--nesterov', default=1, type=int)
-
-""" ---- DATA PARAMETERS ---- """
-parser.add_argument('--dataset_loc', default='../data/generated_targers/simulated_fields', type=str)
+parser.add_argument('--no-nesterov', action='store_false', dest='nesterov')
 
 args = parser.parse_args()
-
-assert os.path.exists(args.dataset_loc)
+print(args.dataset)
 
 """ DEFINE CUDA FUNCTIONALITY """
 args.use_cuda = torch.cuda.is_available() & args.use_cuda
@@ -59,9 +60,6 @@ if args.use_cuda:
     cudnn.benchmark = True
     device = torch.device('cuda')
     args.n_devices = min(torch.cuda.device_count(), args.n_devices)
-
-if not args.batch_size_test:
-    args.batch_size_test = args.batch_size
 
 """ CREATE MODEL NAME BASED ON MODEL ARCHITECTURE AND TRAINING PARAMS
 A DIRECTORY OF NAME 'model_name' WILL BE CREATED AND TRAIN/TEST DATA WILL BE STORED HERE """
@@ -74,7 +72,10 @@ if args.save:
         f.write(str(args))"""
 
 """ GET TRAINLOADER AND TESTLOADER FROM localize() """
-trainloader, testloader = Datasets.localize_wrapper.localize(args)
+
+trainloader, testloader = localize_dataset(root=args.dataset, batch_size=args.batch_size, \
+    batch_size_test=args.batch_size_test, n_processes=args.n_processes, resolution=args.resolution, \
+        transform=transforms.Compose([transforms.ToTensor()]))
 
 """ BUILD MODEL AND CONVERT TO CUDA IF USING GPU & BUILD OPTIMIZER AND SCHEDULER """
 model = SSD300(n_classes=args.n_classes)
@@ -89,13 +90,10 @@ for param_name, param in model.named_parameters():
 
 optimizer = optim.SGD(params=[{'params': biases, 'lr': 2 * args.lr}, {'params': not_biases}], lr=args.lr, \
     momentum=args.momentum, weight_decay=args.weight_decay)
-model = model.to(device)
+model = model.to(device) 
 loss_fn = MultiBoxLoss(priors_cxcy=model.priors_cxcy).to(device)
-# root, batch_size, batch_size_test, transform, n_threads, resolution
-root = 'train-10000_test-2000_res-256_lower-10_upper-24'
-trainloader, testloader = localize(root, args.batch_size, args.batch_size_test, args.n_threads)
-epochs_since_imp = 0
 
+epochs_since_imp = 0
 
 def train(epoch):
     model.train()

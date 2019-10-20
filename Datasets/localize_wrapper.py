@@ -4,7 +4,7 @@ import pickle
 import numpy as np
 from PIL import Image
 import torchvision.transforms as transforms
-from transformations import FractionalMaxPool
+from Datasets.transformations import FractionalMaxPool
 from torch.utils.data import Dataset, DataLoader
 
 
@@ -31,7 +31,7 @@ def show_sample_batch():
     batch_size_test = 4
     n_threads = 1
     transform = transforms.Compose([transforms.ToTensor()])
-    train, test = localize(root, batch_size, batch_size_test, transform, n_threads)
+    train, test = localize_dataset(root, batch_size, batch_size_test, transform, n_threads)
     X, y = iter(train).__next__()
     plt.imshow(np.transpose(torchvision.utils.make_grid(X, nrow=4, padding=0).numpy(), (1, 2, 0)))
     plt.show()
@@ -73,16 +73,16 @@ class ObjectDetection(Dataset):
         return torch.stack(images, dim=0), boxes
 
 
-def localize(root, batch_size, batch_size_test, n_threads, resolution, transform=transforms.Compose([transforms.ToTensor()])):
+def localize_dataset(root, batch_size, batch_size_test, n_processes, resolution, transform=transforms.Compose([transforms.ToTensor()])):
     trainset = ObjectDetection(root=root, split='train', transform=transform, resolution=resolution)
-    trainset[86]
+    # trainset[86]
     testset = ObjectDetection(root=root, split='test', transform=transform, resolution=resolution)
     return DataLoader(
         dataset=trainset, collate_fn=trainset.collate_fn, batch_size=batch_size, 
-            shuffle=True, num_workers=n_threads), \
+            shuffle=True, num_workers=n_processes), \
                 DataLoader(
                     dataset=testset, collate_fn=testset.collate_fn, batch_size=batch_size_test,
-                         shuffle=False, num_workers=n_threads)
+                         shuffle=False, num_workers=n_processes)
     
 """
 root = 'train-10000_test-2000_res-256_lower-10_upper-24'
