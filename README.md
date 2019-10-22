@@ -6,7 +6,7 @@ Current Agenda:
 
 1) Rewrite FractionalMaxPool transformation
 2) Linearize Classification.py
-3) Remove OPTIM directory, the only optimizers being used will be SGD and ADAM (this will be done once classification is rewritten)
+3) Remove OPTIM directory, the only optimizers being used will be SGD and ADAM (this will be done once classification is rewritten)(Done)
 4) Find efficient dimensionality reduction technique to reduce input size of image to the localization pipeline (DONE)
 5) Figure out more efficient way of creating artificial localization input images (if we find a way to do this quickly enough
 we can create new images at run-time since storing enough images for training that are of size 4048x3036 is very rough on memory) (DONE)
